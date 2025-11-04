@@ -1,28 +1,24 @@
-
 from pydantic_settings import BaseSettings
 
 class RmbgSettings(BaseSettings):
-    """Configuration for the RMBG 2.0 processing pipeline."""
-    # The native training size for RMBG 2.0
+    """Configuration for the RMBG 2.0 processing pipeline, aligned with research notebook."""
     MODEL_INPUT_SIZE: tuple[int, int] = (1024, 1024)
 
-    # --- INTELLIGENT NOISE REMOVAL ---
+    # --- INTELLIGENT NOISE REMOVAL (Fine-tuned) ---
     USE_NOISE_REMOVAL: bool = True
-    # Low threshold to create the initial binary mask for component analysis.
-    NOISE_REMOVAL_THRESHOLD: float = 0.05
-    # Any disconnected component with an area smaller than this will be erased.
-    MIN_COMPONENT_AREA: int = 50
+    NOISE_REMOVAL_THRESHOLD: float = 0.02
+    MIN_COMPONENT_AREA: int = 25
 
     # --- POST-PROCESSING (Core & Penumbra) ---
-    # Defines the solid, opaque "core" of the image. A lower value is more forgiving.
-    CORE_THRESHOLD: float = 0.90
+    # Defines the solid, opaque "core" of the image.
+    CORE_THRESHOLD: float = 0.95
+    # --- ADDED FROM NOTEBOOK ---
+    # Defines the semi-transparent "penumbra" (soft edges). Any pixel below this is considered noise.
+    PENUMBRA_LOWER_BOUND: float = 0.05
 
-    # --- FINAL POLISHING ---
+    # --- FINAL POLISHING (Fine-tuned) ---
     USE_GUIDED_FILTER: bool = True
-    # A larger radius creates a more pronounced smoothing effect along the edges.
-    GUIDED_FILTER_RADIUS: int = 5
-    # A higher epsilon smooths over more minor texture variations.
-    GUIDED_FILTER_EPS: float = 0.02
-
+    GUIDED_FILTER_RADIUS: int = 3
+    GUIDED_FILTER_EPS: float = 0.01
 
 settings = RmbgSettings()

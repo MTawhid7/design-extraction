@@ -4,7 +4,7 @@ import torch
 import numpy as np
 import structlog
 from PIL import Image
-from app.core.model_manager import ModelManager # <-- CORRECTED IMPORT PATH
+from app.core.model_manager import ModelManager
 from .config import settings
 from . import utils as rmbg_utils
 
@@ -13,13 +13,6 @@ log = structlog.get_logger(__name__)
 def run(input_image: Image.Image, model_manager: ModelManager) -> Image.Image:
     """
     Performs background removal on an image using the RMBG-2.0 model.
-
-    Args:
-        input_image: The PIL Image object (RGB).
-        model_manager: The manager holding the pre-loaded models.
-
-    Returns:
-        A PIL Image object with a transparent background (RGBA).
     """
     log.info("RMBG: Starting process.")
     original_size = input_image.size
@@ -28,21 +21,13 @@ def run(input_image: Image.Image, model_manager: ModelManager) -> Image.Image:
     log.info("RMBG: Generating soft mask...")
     inputs = model_manager.rmbg_processor(images=input_image, return_tensors="pt")
     pixel_values = inputs.pixel_values.to(model_manager.device)
-
     if model_manager.device.type == 'cuda':
         pixel_values = pixel_values.half()
-
     with torch.no_grad():
         outputs = model_manager.rmbg_model(pixel_values)
         raw_mask = outputs[-1].squeeze()
-
     original_alpha_tensor = torch.sigmoid(raw_mask).cpu().float()
-
-    # Resize mask to original image size
-    alpha_pil = Image.fromarray(
-        (original_alpha_tensor.numpy() * 255).astype(np.uint8)
-    ).resize(original_size, Image.LANCZOS)
-
+    alpha_pil = Image.fromarray((original_alpha_tensor.numpy() * 255).astype(np.uint8)).resize(original_size, Image.LANCZOS)
     original_alpha = np.array(alpha_pil) / 255.0
     log.info("RMBG: Soft mask generated.")
 
@@ -56,9 +41,12 @@ def run(input_image: Image.Image, model_manager: ModelManager) -> Image.Image:
             settings.MIN_COMPONENT_AREA
         )
 
-    # --- STEP 3: CORE POST-PROCESSING ---
-    log.info("RMBG: Applying core threshold...")
-    processed_alpha = np.where(cleaned_alpha > settings.CORE_THRESHOLD, 1.0, cleaned_alpha)
+    # --- STEP 3: CORE & PENUMBRA POST-PROCESSING (IMPROVED LOGIC) ---
+    log.info("RMBG: Applying Core & Penumbra post-processing...")
+    # First, zero out any remaining noise below the penumbra threshold
+    penumbra_alpha = np.where(cleaned_alpha > settings.PENUMBRA_LOWER_BOUND, cleaned_alpha, 0.0)
+    # Second, solidify the core by setting any pixel above the core threshold to fully opaque
+    processed_alpha = np.where(penumbra_alpha > settings.CORE_THRESHOLD, 1.0, penumbra_alpha)
 
     # --- STEP 4: FINAL POLISH WITH GUIDED FILTER ---
     alpha_final = processed_alpha
