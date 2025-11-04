@@ -21,10 +21,23 @@ make
 - NVIDIA Container Toolkit (for GPU support)
 - A working `nvidia-smi` command on the host
 
+### For Local Testing (`make test`)
+The test client runs on the host. You must install its dependencies in a local virtual environment.
+# Create and activate a virtual environment
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+# Install dependencies
+```
+pip install -r requirements.txt
+```
+
 ### 1. Configure the Environment
 This is the most critical step. You must provide your API keys for the service to function.
 
-1.  **Create the `.env` file:**
+1.  **Copy the example `.env` file:**
     ```bash
     cp .env.example .env
     ```
@@ -32,10 +45,10 @@ This is the most critical step. You must provide your API keys for the service t
     ```bash
     nano .env
     ```
-3.  **Add your keys:**
+3.  **Add your keys and URL:**
     - `GEMINI_API_KEY`: Your Google Gemini API key.
     - `HF_TOKEN`: Your Hugging Face token. This is **required** to download the gated RMBG 2.0 model. Ensure you have accepted the license for `briaai/RMBG-2.0` on the Hugging Face website.
-    - `BASE_URL`: The public-facing URL for your service (e.g., `http://192.168.10.74:8001`).
+    - `BASE_URL`: The public-facing URL for your service (e.g., `http://localhost:8008` for local testing).
 
 ### 2. One-Time Setup (Build and Download)
 This single command builds the Docker image and runs a dedicated script to download all required models to the `./models` directory on your host. This will take 5-10 minutes.
@@ -62,7 +75,7 @@ make up
   ```bash
   make check-cache
   ```
-  You should see a large cache size (e.g., `4.5G`) and a list of the key model files.
+  You should see a large cache size (e.g., `2.2G`) and a list of the key model directories.
 
 - **Run the Test Suite**: Execute the automated test script.
   ```bash
@@ -104,14 +117,14 @@ Processes front and back images through the full pipeline.
   }
 }
 ```
-**Response (200 OK)**:
+**Response (200 OK)** (assuming `BASE_URL=http://localhost:8008`):
 ```json
 {
   "id": 123,
-  "front_rmbg": "http://192.168.10.74:8001/outputs/design_123..._front_rmbg.png",
-  "front_birefnet": "http://192.168.10.74:8001/outputs/design_123..._front_birefnet.png",
-  "back_rmbg": "http://192.168.10.74:8001/outputs/design_123..._back_rmbg.png",
-  "back_birefnet": "http://192.168.10.74:8001/outputs/design_123..._back_birefnet.png",
+  "front_rmbg": "http://localhost:8008/design_123..._front_rmbg.png",
+  "front_birefnet": "http://localhost:8008/design_123..._front_birefnet.png",
+  "back_rmbg": "http://localhost:8008/design_123..._back_rmbg.png",
+  "back_birefnet": "http://localhost:8008/design_123..._back_birefnet.png",
   "processing_time_seconds": 14.7
 }
 ```
@@ -124,13 +137,7 @@ Checks the service and model loading status.
 - **GPU**: NVIDIA L4 24GB
 - **Startup Time**: ~30 seconds (container start + model load)
 - **Processing Time**: 8-15 seconds per request
-- **Peak VRAM Usage**: ~10GB
-
-**Key Optimizations**:
-1.  **Persistent Model Cache**: Models are stored in `./models`, avoiding re-downloads. This is the most critical optimization for fast startups.
-2.  **FP16 Inference**: `USE_FP16=true` is enabled by default, halving VRAM usage and accelerating inference.
-3.  **Parallel Processing**: The pipeline is fully asynchronous to maximize GPU utilization.
-4.  **Optimized Docker Image**: A multi-stage `Dockerfile` creates a minimal production image.
+- **Peak VRAM Usage**: ~1.3GB
 
 ## 💾 Backup Strategy
 
@@ -148,14 +155,17 @@ The most critical asset is the downloaded model cache.
 
 ## 🐛 Troubleshooting
 
+- **`Bind for ... port is already allocated` on `make up`**: The host port (e.g., `8008`) is in use by another process.
+  - **Solution**: Check what is using the port with `sudo lsof -i :8008`. If needed, change the host-side port in `docker-compose.yml` to an unused one (e.g., `8009:8001`).
+
 - **`FATAL ERROR: Model files not found` on `make up`**: This means the model cache is empty.
   - **Solution**: Run `make download-models` to populate the cache, then try `make up` again. Use `make check-cache` to verify.
+
+- **`ModuleNotFoundError` on `make test`**: The test client's dependencies are not installed on the host.
+  - **Solution**: Follow the "For Local Testing" instructions in the Prerequisites section to set up a virtual environment.
 
 - **`401 Client Error` on `make download-models`**: This is an authentication error with Hugging Face.
   - **Solution**: Ensure your `HF_TOKEN` in `.env` is correct and that you have accepted the license for `briaai/RMBG-2.0` on the Hugging Face website.
 
 - **`CUDA out of memory`**: The GPU has run out of VRAM.
   - **Solution**: Run `make restart` to clear the GPU memory. Ensure no other processes are using the GPU.
-
-- **GPU Not Detected in Container**: The service starts but runs very slowly.
-  - **Solution**: Verify the NVIDIA Container Toolkit is installed correctly on the host. Run `make shell` and then `nvidia-smi` inside the container to check for GPU access.

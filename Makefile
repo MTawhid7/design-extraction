@@ -46,7 +46,7 @@ test: ## 🧪 Run the test suite against the running service
 	@curl --fail http://localhost:8008/health || (echo "Health check failed. Is the service running? (make up)" && exit 1)
 	@echo "\n\n--> [2/2] Running Python test client..."
 	@venv/bin/python3 test_client.py
-	
+
 logs: ## 📜 View live logs from the service
 	@docker compose logs -f
 
@@ -62,6 +62,8 @@ check-cache: ## 🔍 Verify the persistent model cache on the host
 	@if [ -d "./models" ] && [ "$(ls -A ./models)" ]; then \
 		echo "✓ Cache directory exists and is not empty."; \
 		echo "Cache Size: $$(du -sh ./models | cut -f1)"; \
+		echo "--- Key Directories ---"; \
+		@find ./models -maxdepth 2 -type d; \
 	else \
 		echo "✗ No cache directory found in ./models. Please run 'make download-models'."; \
 	fi
