@@ -1,6 +1,7 @@
 """
 Centralized model manager for all ML models.
 Optimized for L4 GPU with 24GB VRAM.
+Updated for google-genai SDK (2025).
 """
 import torch
 import structlog
@@ -13,8 +14,7 @@ from basicsr.archs.rrdbnet_arch import RRDBNet
 import os
 
 from app.config import settings
-# --- IMPORT THE GEMINI CONFIGS DIRECTLY FOR INITIALIZATION ---
-from app.modules.extractor.config import GENERATION_CONFIG, SAFETY_SETTINGS
+
 
 log = structlog.get_logger(__name__)
 CACHE_DIR = os.getenv("HF_HOME", "/models")
@@ -25,8 +25,7 @@ class ModelManager:
     def __init__(self):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.is_initialized = False
-        # --- The manager now holds the high-level GenerativeModel object ---
-        self.gemini_model: Optional[genai.GenerativeModel] = None
+        self.gemini_client: Optional[genai.Client] = None
         self.rmbg_model = None
         self.rmbg_processor = None
         self.birefnet_model = None
@@ -50,19 +49,14 @@ class ModelManager:
             log.info(f"GPU memory: {allocated:.2f}GB allocated, {reserved:.2f}GB reserved")
 
     async def _init_gemini(self):
-        log.info("Initializing Gemini model...")
+        log.info("Initializing Gemini client...")
         api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key: raise ValueError("GEMINI_API_KEY environment variable not set")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY environment variable not set")
 
-        # --- THIS IS THE CORRECTED, MODERN INITIALIZATION ---
-        # The GenerativeModel helper is the standard, robust way to interact with the API.
-        genai.configure(api_key=api_key)
-        self.gemini_model = genai.GenerativeModel(
-            model_name=settings.GEMINI_MODEL_NAME,
-            generation_config=GENERATION_CONFIG,
-            safety_settings=SAFETY_SETTINGS
-        )
-        log.info("Gemini GenerativeModel initialized")
+        # Create the new google-genai SDK client
+        self.gemini_client = genai.Client(api_key=api_key)
+        log.info("Gemini Client initialized with google-genai SDK")
 
     async def _init_rmbg(self):
         log.info("Loading RMBG 2.0 model from local path...")
@@ -111,6 +105,10 @@ class ModelManager:
         if self.rmbg_model: self.rmbg_model.cpu()
         if self.birefnet_model: self.birefnet_model.cpu()
         if self.realesrgan_model: self.realesrgan_model = None
+        if self.gemini_client:
+            # Close the async client if using async context
+            if hasattr(self.gemini_client, 'aio'):
+                await self.gemini_client.aio.aclose()
         if self.device.type == "cuda": torch.cuda.empty_cache()
         self.is_initialized = False
         log.info("ModelManager cleanup complete")

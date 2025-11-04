@@ -1,48 +1,56 @@
 """
 Async Gemini extractor optimized for parallel processing.
+Updated for google-genai SDK and Gemini 2.5 Flash Image (2025).
 """
 import structlog
 from PIL import Image
 from io import BytesIO
 from app.core.model_manager import ModelManager
-from .config import EXTRACTION_PROMPT
+from .config import EXTRACTION_PROMPT, GENERATION_CONFIG, SAFETY_SETTINGS
 
 log = structlog.get_logger(__name__)
 
 
 async def run(input_image: Image.Image, model_manager: ModelManager) -> Image.Image:
     """
-    Extracts the main design from an image using the Gemini Vision API.
+    Extracts the main design from an image using the Gemini 2.5 Flash Image API.
 
     Args:
         input_image: PIL Image object (already downloaded)
-        model_manager: The manager holding the configured Gemini model
+        model_manager: The manager holding the Gemini client
 
     Returns:
         Extracted design as PIL Image
     """
     log.info("Gemini: Starting extraction", input_size=input_image.size)
 
-    # --- Use the fully configured GenerativeModel from the manager ---
-    gemini_model = model_manager.gemini_model
-    if not gemini_model:
-        raise RuntimeError("Gemini model is not initialized in ModelManager.")
+    # Get the client from model manager
+    client = model_manager.gemini_client
+    if not client:
+        raise RuntimeError("Gemini client is not initialized in ModelManager.")
 
+    # Prepare the contents (prompt + image)
     contents = [EXTRACTION_PROMPT, input_image]
 
     try:
         log.info("Gemini: Sending request to API...")
 
-        # --- THIS IS THE CORRECTED ASYNC API CALL ---
-        # The high-level model object handles passing the configuration correctly.
-        response = await gemini_model.generate_content_async(contents=contents)
+        # Use the async client for proper async operation
+        response = await client.aio.models.generate_content(
+            model="gemini-2.5-flash-image",  # Use the image generation model
+            contents=contents,
+            config=GENERATION_CONFIG,
+        )
 
+        # Process the response
         if response.candidates and response.candidates[0].content:
             for part in response.candidates[0].content.parts:
+                # Check for inline image data
                 if part.inline_data is not None:
                     log.info("Gemini: Received image response",
                             mime_type=part.inline_data.mime_type)
 
+                    # Extract image bytes
                     image_bytes = part.inline_data.data
                     extracted_image = Image.open(BytesIO(image_bytes))
 
@@ -52,6 +60,7 @@ async def run(input_image: Image.Image, model_manager: ModelManager) -> Image.Im
 
                     # Ensure RGB mode for consistency
                     if extracted_image.mode == 'RGBA':
+                        # Create white background for RGBA images
                         background = Image.new('RGB', extracted_image.size, (255, 255, 255))
                         background.paste(extracted_image, mask=extracted_image.split()[3])
                         return background

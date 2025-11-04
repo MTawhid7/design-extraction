@@ -1,9 +1,10 @@
 """
 Configuration for the Gemini Extractor module.
+Updated for google-genai SDK and Gemini 2.5 Flash Image (2025).
 """
-from google import genai
+from google.genai import types
 
-# Extraction prompt for Gemini
+# Extraction prompt for Gemini 2.5 Flash Image
 EXTRACTION_PROMPT = """
 Task:
 Given an input image of a t-shirt, extract only the printed design from the shirt. Remove all fabric texture, folds, shadows, or background. Output a clean, sharp, high-resolution version of the design itself.
@@ -23,16 +24,32 @@ Style / Output Requirements:
 - Color fidelity: Match the original printed design as closely as possible.
 """
 
-# Generation configuration for Gemini API
-GENERATION_CONFIG = genai.types.GenerationConfig(
-    response_modalities=["IMAGE"],
+# Generation configuration for Gemini 2.5 Flash Image API
+GENERATION_CONFIG = types.GenerateContentConfig(
+    response_modalities=["IMAGE"],  # Request image output
     temperature=0.4,
+    # Optional: Configure image output settings
+    # image_config=types.ImageConfig(
+    #     aspect_ratio="1:1",  # Options: "1:1", "16:9", "9:16", "4:3", "3:4", etc.
+    # )
 )
 
 # Safety settings for Gemini API
 SAFETY_SETTINGS = [
-    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+    types.SafetySetting(
+        category="HARM_CATEGORY_HARASSMENT",
+        threshold="BLOCK_NONE"
+    ),
+    types.SafetySetting(
+        category="HARM_CATEGORY_HATE_SPEECH",
+        threshold="BLOCK_NONE"
+    ),
+    types.SafetySetting(
+        category="HARM_CATEGORY_SEXUALLY_EXPLICIT",
+        threshold="BLOCK_NONE"
+    ),
+    types.SafetySetting(
+        category="HARM_CATEGORY_DANGEROUS_CONTENT",
+        threshold="BLOCK_NONE"
+    ),
 ]

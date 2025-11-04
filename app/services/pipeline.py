@@ -1,6 +1,7 @@
 """
 Main processing pipeline with maximum parallelism.
 Orchestrates the complete image processing workflow.
+Updated for google-genai SDK (2025).
 """
 import asyncio
 from typing import Dict, List, Tuple
@@ -107,6 +108,7 @@ class ImageProcessingPipeline:
         """Extract designs using Gemini in parallel."""
 
         # Run Gemini extraction in parallel for both images
+        # The model_manager is passed to the process module
         front_task = gemini_process.run(front_img, self.model_manager)
         back_task = gemini_process.run(back_img, self.model_manager)
 
