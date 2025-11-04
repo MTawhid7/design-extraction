@@ -54,6 +54,11 @@ async def run(input_image: Image.Image, model_manager: ModelManager) -> Image.Im
                     image_bytes = part.inline_data.data
                     extracted_image = Image.open(BytesIO(image_bytes))
 
+                    # --- THIS IS THE CRITICAL FIX ---
+                    # Force Pillow to load the image data from the in-memory stream.
+                    # This prevents the "broken data stream" error in downstream processes.
+                    extracted_image.load()
+
                     log.info("Gemini: Extraction successful",
                             output_size=extracted_image.size,
                             output_mode=extracted_image.mode)
