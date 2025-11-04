@@ -6,22 +6,21 @@ from google.genai import types
 
 # Extraction prompt for Gemini 2.5 Flash Image
 EXTRACTION_PROMPT = """
-Task:
-Given an input image of a t-shirt, extract only the printed design from the shirt. Remove all fabric texture, folds, shadows, or background. Output a clean, sharp, high-resolution version of the design itself.
+**Primary Task:** Isolate and extract the graphical design from the provided t-shirt image. The final output must be a clean, high-resolution image of the design itself, completely free of any influence from the original t-shirt.
 
-Detailed Instructions:
-1. Detect and isolate the printed or embroidered graphic visible on the t-shirt.
-2. Remove all non-design elements, including the t-shirt fabric, wrinkles, shadows, lighting gradients, and background.
-3. Preserve accurate colors, edges, and proportions of the original design.
-4. Output should be a transparent-background PNG.
-5. Maintain maximum sharpness and resolution, suitable for reuse in print or digital design.
-6. Do not include any part of the garment, model, or scene—only the design.
+**Critical Exclusion Criteria (What to Avoid):**
+*   **NO T-SHIRT CONTEXT:** Do not include any part of the t-shirt fabric, texture, wrinkles, seams, or collar.
+*   **NO GHOSTING:** There should be absolutely no residual shape or outline of the t-shirt.
+*   **NO ENVIRONMENTAL ELEMENTS:** Eliminate all background, shadows, lighting effects, or any other element from the original photo.
 
-Style / Output Requirements:
-- Output format: Design-only image (no background or fabric).
-- Resolution: Highest available, lossless quality.
-- Edge clarity: Perfectly clean, no blending with the shirt.
-- Color fidelity: Match the original printed design as closely as possible.
+**Detailed Extraction and Output Requirements:**
+1.  **Isolate the Design:** Precisely identify and select only the printed or embroidered graphic.
+2.  **Recreate as a Flat Graphic:** The output should appear as a perfectly flat, two-dimensional representation of the design, as if it were a digital vector graphic.
+3.  **Preserve Integrity:** Maintain the original colors, proportions, and details of the design with high fidelity.
+4.  **Clean Edges:** The edges of the design must be sharp and well-defined.
+5.  **Output Format:** Generate a high-resolution PNG with a transparent background.
+
+**Final Check:** Before outputting, verify that the image contains ONLY the design and nothing else.
 """
 
 # Generation configuration for Gemini 2.5 Flash Image API
