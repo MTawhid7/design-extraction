@@ -1,7 +1,7 @@
 """
 Main processing pipeline with maximum parallelism.
 Orchestrates the complete image processing workflow.
-Updated for google-genai SDK (2025).
+Updated for google-genai SDK (2025) and configurable concurrency.
 """
 import asyncio
 from typing import Dict, List, Tuple
@@ -32,21 +32,13 @@ class ImageProcessingPipeline:
         self.downloader = ImageDownloader()
         self.output_dir = Path(settings.OUTPUT_DIR)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        # --- FLEXIBLE CONCURRENCY ---
+        # The semaphore is now initialized with the value from the settings file.
+        self.upscaler_semaphore = asyncio.Semaphore(settings.UPSCALER_CONCURRENCY_LIMIT)
+        log.info("Pipeline initialized", upscaler_concurrency=settings.UPSCALER_CONCURRENCY_LIMIT)
 
     async def process(self, request: ProcessRequest) -> ProcessResponse:
-        """
-        Execute the complete processing pipeline with maximum parallelism.
-
-        Pipeline flow:
-        1. Download front & back images (parallel)
-        2. Gemini extraction on both (parallel)
-        3. For each extracted image:
-           - RMBG background removal
-           - BiRefNet background removal
-           (parallel)
-        4. Upscale all 4 results (parallel)
-        5. Save all images and return URLs
-        """
+        """Execute the complete processing pipeline."""
         start_time = datetime.now()
         log.info("Starting pipeline", request_id=request.id)
 
@@ -91,126 +83,56 @@ class ImageProcessingPipeline:
         """Download front and back images in parallel."""
         front_task = self.downloader.download(request.output.front)
         back_task = self.downloader.download(request.output.back)
-
         front_img, back_img = await asyncio.gather(front_task, back_task)
-
-        log.info("Images downloaded",
-                 front_size=front_img.size,
-                 back_size=back_img.size)
-
+        log.info("Images downloaded", front_size=front_img.size, back_size=back_img.size)
         return front_img, back_img
 
-    async def _extract_designs(
-        self,
-        front_img: Image.Image,
-        back_img: Image.Image
-    ) -> Tuple[Image.Image, Image.Image]:
-        """Extract designs using Gemini in parallel."""
-
-        # Run Gemini extraction in parallel for both images
-        # The model_manager is passed to the process module
+    async def _extract_designs(self, front_img: Image.Image, back_img: Image.Image) -> Tuple[Image.Image, Image.Image]:
         front_task = gemini_process.run(front_img, self.model_manager)
         back_task = gemini_process.run(back_img, self.model_manager)
-
         front_extracted, back_extracted = await asyncio.gather(front_task, back_task)
-
-        log.info("Designs extracted",
-                 front_size=front_extracted.size,
-                 back_size=back_extracted.size)
-
+        log.info("Designs extracted", front_size=front_extracted.size, back_size=back_extracted.size)
         return front_extracted, back_extracted
 
-    async def _remove_backgrounds(
-        self,
-        front_extracted: Image.Image,
-        back_extracted: Image.Image
-    ) -> Dict[str, Image.Image]:
-        """
-        Remove backgrounds using both RMBG and BiRefNet in parallel.
-        Creates 4 outputs total (2 images × 2 models).
-        """
-
-        # Create all 4 background removal tasks in parallel
+    async def _remove_backgrounds(self, front_extracted: Image.Image, back_extracted: Image.Image) -> Dict[str, Image.Image]:
         tasks = {
-            "front_rmbg": asyncio.create_task(
-                asyncio.to_thread(rmbg_process.run, front_extracted, self.model_manager)
-            ),
-            "front_birefnet": asyncio.create_task(
-                asyncio.to_thread(birefnet_process.run, front_extracted, self.model_manager)
-            ),
-            "back_rmbg": asyncio.create_task(
-                asyncio.to_thread(rmbg_process.run, back_extracted, self.model_manager)
-            ),
-            "back_birefnet": asyncio.create_task(
-                asyncio.to_thread(birefnet_process.run, back_extracted, self.model_manager)
-            ),
+            "front_rmbg": asyncio.create_task(asyncio.to_thread(rmbg_process.run, front_extracted, self.model_manager)),
+            "front_birefnet": asyncio.create_task(asyncio.to_thread(birefnet_process.run, front_extracted, self.model_manager)),
+            "back_rmbg": asyncio.create_task(asyncio.to_thread(rmbg_process.run, back_extracted, self.model_manager)),
+            "back_birefnet": asyncio.create_task(asyncio.to_thread(birefnet_process.run, back_extracted, self.model_manager)),
         }
-
-        # Wait for all tasks to complete
         results = await asyncio.gather(*tasks.values())
-
-        # Map results back to keys
         bg_removed = {key: result for key, result in zip(tasks.keys(), results)}
-
         log.info("Background removal complete", outputs=list(bg_removed.keys()))
-
         return bg_removed
 
-    async def _upscale_images(
-        self,
-        bg_removed_images: Dict[str, Image.Image]
-    ) -> Dict[str, Image.Image]:
-        """Upscale all 4 images in parallel."""
+    async def _upscale_one_image(self, key: str, image: Image.Image) -> Tuple[str, Image.Image]:
+        """A helper function to wrap the upscaling task with the semaphore."""
+        async with self.upscaler_semaphore:
+            log.info(f"Upscaler lock acquired for: {key}")
+            upscaled_image = await asyncio.to_thread(upscaler_process.run, image, self.model_manager)
+            log.info(f"Upscaler lock released for: {key}")
+            return key, upscaled_image
 
-        # Create upscaling tasks for all images
-        tasks = {
-            key: asyncio.create_task(
-                asyncio.to_thread(upscaler_process.run, img, self.model_manager)
-            )
-            for key, img in bg_removed_images.items()
-        }
-
-        # Wait for all upscaling to complete
-        results = await asyncio.gather(*tasks.values())
-
-        # Map results back to keys
-        upscaled = {key: result for key, result in zip(tasks.keys(), results)}
-
+    async def _upscale_images(self, bg_removed_images: Dict[str, Image.Image]) -> Dict[str, Image.Image]:
+        """Upscale images with concurrency limited by the semaphore."""
+        tasks = [self._upscale_one_image(key, img) for key, img in bg_removed_images.items()]
+        results = await asyncio.gather(*tasks)
+        upscaled = {key: result_img for key, result_img in results}
         log.info("Upscaling complete", outputs=list(upscaled.keys()))
-
         return upscaled
 
-    async def _save_images(
-        self,
-        request_id: int,
-        images: Dict[str, Image.Image]
-    ) -> Dict[str, str]:
-        """Save all images and return their URLs."""
-
+    async def _save_images(self, request_id: int, images: Dict[str, Image.Image]) -> Dict[str, str]:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         urls = {}
-
-        # Save all images in parallel
         save_tasks = []
         for key, img in images.items():
             filename = f"design_{request_id}_{timestamp}_{key}.png"
             filepath = self.output_dir / filename
-
-            # Create save task
-            task = asyncio.create_task(
-                asyncio.to_thread(img.save, filepath, "PNG")
-            )
+            task = asyncio.create_task(asyncio.to_thread(img.save, filepath, "PNG"))
             save_tasks.append((key, filepath, task))
-
-        # Wait for all saves to complete
         await asyncio.gather(*[task for _, _, task in save_tasks])
-
-        # Generate URLs
         for key, filepath, _ in save_tasks:
-            # Generate URL based on your storage configuration
-            # This is a placeholder - adjust based on your actual storage setup
             urls[key] = f"{settings.BASE_URL}/{filepath.name}"
-
         log.info("Images saved", count=len(urls))
-
         return urls

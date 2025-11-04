@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     OUTPUT_DIR: str = "outputs"
     BASE_URL: str = "https://yourcdn.com"  # Base URL for generated images
 
+    # --- NEW CONCURRENCY SETTING ---
+    # Controls how many upscaling tasks can run in parallel.
+    # Set to 1 for GPUs with low VRAM (< 16GB).
+    # Set to 4 for powerful GPUs (>= 24GB) like the NVIDIA L4.
+    UPSCALER_CONCURRENCY_LIMIT: int = 1
+
     # Processing settings
     MAX_IMAGE_SIZE: int = 4096  # Maximum image dimension
 
