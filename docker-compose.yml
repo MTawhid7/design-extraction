@@ -1,0 +1,79 @@
+services:
+  image-processor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: image-processor:latest
+    container_name: image-processor
+
+    # GPU configuration
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    # Environment variables
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - DEVICE=cuda
+      - USE_FP16=true
+      - OUTPUT_DIR=/app/outputs
+      - BASE_URL=${BASE_URL:-https://yourcdn.com}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - HOST=0.0.0.0
+      - PORT=8001
+      - WORKERS=1
+
+      # Model cache location (external volume)
+      - HF_HOME=/models # Corrected Path
+      - HF_HUB_OFFLINE=1
+
+      # Optional: Skip warmup for faster startup (not recommended)
+      # - SKIP_WARMUP=false
+
+    # Port mapping
+    ports:
+      - "8008:8001"
+
+    # Volume mounts - CRITICAL: Persistent model storage
+    volumes:
+      # Persistent outputs
+      - ./outputs:/app/outputs
+
+      # Persistent logs
+      - ./logs:/app/logs
+
+      # IMPORTANT: Persistent model cache (download once, use forever)
+      # This directory must exist and contain downloaded models
+      - ./models:/models
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import requests; requests.get('http://localhost:8001/health', timeout=5).raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Network configuration
+    networks:
+      - app-network
+
+# Networks
+networks:
+  app-network:
+    driver: bridge

@@ -1,0 +1,40 @@
+# --- Environment ---
+# Ignore environment files, which contain sensitive API keys and secrets.
+.env
+.env.*
+
+# --- Python ---
+# Ignore virtual environments, which can be recreated from requirements.txt.
+venv/
+env/
+ENV/
+
+# Ignore Python bytecode and cache folders.
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Generated Content ---
+# Ignore generated images and logs. These are runtime artifacts.
+outputs/
+logs/
+*.log
+
+# --- Model Cache ---
+# CRITICAL: Ignore the model cache directory. These files are very large (GBs)
+# and should be downloaded by the operator, not stored in Git.
+models/
+.cache/
+
+# --- IDE & OS Specific ---
+# Ignore settings and temporary files from common editors and operating systems.
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# --- Docker ---
+# If you have local Docker build cache files, you might want to ignore them.
+.dockerignore

@@ -1,0 +1,75 @@
+services:
+  image-processor-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production # Keep this target to ensure all dependencies are there
+    image: image-processor:dev
+    container_name: image-processor-dev
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - DEVICE=cuda
+      - USE_FP16=true
+      - OUTPUT_DIR=/app/outputs
+      - BASE_URL=${BASE_URL:-http://localhost:8001}
+      - LOG_LEVEL=DEBUG
+      - HOST=0.0.0.0
+      - PORT=8001
+      - WORKERS=1
+
+      # --- UNIFIED CACHING STRATEGY ---
+      # Point to the same model directory as production
+      - HF_HOME=/models
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1
+
+    ports:
+      - "8008:8001"
+
+    volumes:
+      # Mount source code for development
+      - ./app:/app/app:ro
+      - ./main.py:/app/main.py:ro
+
+      # Persistent output storage
+      - ./outputs:/app/outputs
+
+      # Persistent logs
+      - ./logs:/app/logs
+
+      # --- UNIFIED CACHING STRATEGY ---
+      # Mount the host's ./models directory, just like production
+      - ./models:/models
+
+    # Override command for development with auto-reload
+    command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload --log-level debug
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import requests; requests.get('http://localhost:8001/health', timeout=5).raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    networks:
+      - app-network
+
+# The named volume is no longer needed
+# volumes:
+#  model-cache-dev:
+#    driver: local
+
+networks:
+  app-network:
+    driver: bridge

@@ -1,0 +1,54 @@
+# FastAPI and server
+fastapi>=0.115.0,<0.125.0
+uvicorn[standard]>=0.32.0,<0.40.0
+python-multipart>=0.0.9,<0.1.0
+
+# Pydantic
+pydantic>=2.9.0,<3.0.0
+pydantic-settings>=2.5.0,<3.0.0
+
+# Image processing
+Pillow>=10.4.0,<11.0.0
+opencv-python>=4.10.0,<5.0.0
+opencv-contrib-python>=4.10.0,<5.0.0
+
+# ====================================================================
+# --- FINAL & ROBUST FIX for ML/DL Frameworks ---
+#
+# 1. Install basicsr and gfpgan directly from GitHub. The PyPI versions are
+#    outdated and incompatible with modern torch/torchvision.
+#
+-e git+https://github.com/xinntao/BasicSR.git#egg=basicsr
+-e git+https://github.com/TencentARC/GFPGAN.git#egg=gfpgan
+
+# 2. Use modern, compatible versions of all other ML libraries.
+torch>=2.3.0
+torchvision>=0.18.0
+transformers>=4.40.0
+realesrgan
+
+# 3. Add peer dependencies required by the remote code from the models.
+timm      # Required by briaai/RMBG-2.0
+kornia    # Required by briaai/RMBG-2.0
+einops    # Required by ZhengPeng7/BiRefNet
+# ====================================================================
+
+
+# Google Gemini (latest GA version)
+google-genai>=1.47.0,<2.0.0
+
+# HTTP client
+httpx>=0.28.1,<1.0.0
+
+# Logging
+structlog>=24.4.0,<25.0.0
+
+# Utilities
+python-dotenv>=1.0.0,<2.0.0
+
+# Hugging Face Hub (for model downloads)
+huggingface-hub>=0.25.0,<1.0.0
+hf-transfer # For high-performance downloads
+
+# NumPy (specified for compatibility)
+numpy>=1.26.0,<2.0.0
