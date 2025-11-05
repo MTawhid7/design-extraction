@@ -1,23 +1,21 @@
 """
 Main processing pipeline with maximum parallelism.
 Orchestrates the complete image processing workflow.
-Updated for google-genai SDK (2025) and configurable concurrency.
+Updated for IS-Net integration (2025).
 """
 import asyncio
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 from PIL import Image
 import structlog
 from pathlib import Path
-import uuid
 from datetime import datetime
 
 from app.core.model_manager import ModelManager
 from app.models.request import ProcessRequest
-from app.models.response import ProcessResponse, ProcessedImage
+from app.models.response import ProcessResponse
 from app.services.downloader import ImageDownloader
 from app.modules.extractor import process as gemini_process
-from app.modules.remover.rmbg import process as rmbg_process
-from app.modules.remover.birefnet import process as birefnet_process
+from app.modules.remover.isnet import process as isnet_process
 from app.modules.upscaler import process as upscaler_process
 from app.config import settings
 
@@ -32,8 +30,6 @@ class ImageProcessingPipeline:
         self.downloader = ImageDownloader()
         self.output_dir = Path(settings.OUTPUT_DIR)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        # --- FLEXIBLE CONCURRENCY ---
-        # The semaphore is now initialized with the value from the settings file.
         self.upscaler_semaphore = asyncio.Semaphore(settings.UPSCALER_CONCURRENCY_LIMIT)
         log.info("Pipeline initialized", upscaler_concurrency=settings.UPSCALER_CONCURRENCY_LIMIT)
 
@@ -43,23 +39,18 @@ class ImageProcessingPipeline:
         log.info("Starting pipeline", request_id=request.id)
 
         try:
-            # Stage 1: Download images in parallel
             log.info("Stage 1: Downloading images...")
             front_img, back_img = await self._download_images(request)
 
-            # Stage 2: Gemini extraction in parallel
             log.info("Stage 2: Extracting designs with Gemini...")
             front_extracted, back_extracted = await self._extract_designs(front_img, back_img)
 
-            # Stage 3: Background removal (all combinations in parallel)
-            log.info("Stage 3: Removing backgrounds...")
+            log.info("Stage 3: Removing backgrounds with IS-Net...")
             bg_removed_images = await self._remove_backgrounds(front_extracted, back_extracted)
 
-            # Stage 4: Upscale all images in parallel
             log.info("Stage 4: Upscaling images...")
             upscaled_images = await self._upscale_images(bg_removed_images)
 
-            # Stage 5: Save all images and generate URLs
             log.info("Stage 5: Saving images...")
             urls = await self._save_images(request.id, upscaled_images)
 
@@ -68,10 +59,8 @@ class ImageProcessingPipeline:
 
             return ProcessResponse(
                 id=request.id,
-                front_rmbg=urls["front_rmbg"],
-                front_birefnet=urls["front_birefnet"],
-                back_rmbg=urls["back_rmbg"],
-                back_birefnet=urls["back_birefnet"],
+                front_output=urls["front"],
+                back_output=urls["back"],
                 processing_time_seconds=elapsed
             )
 
@@ -96,10 +85,10 @@ class ImageProcessingPipeline:
 
     async def _remove_backgrounds(self, front_extracted: Image.Image, back_extracted: Image.Image) -> Dict[str, Image.Image]:
         tasks = {
-            "front_rmbg": asyncio.create_task(asyncio.to_thread(rmbg_process.run, front_extracted, self.model_manager)),
-            "front_birefnet": asyncio.create_task(asyncio.to_thread(birefnet_process.run, front_extracted, self.model_manager)),
-            "back_rmbg": asyncio.create_task(asyncio.to_thread(rmbg_process.run, back_extracted, self.model_manager)),
-            "back_birefnet": asyncio.create_task(asyncio.to_thread(birefnet_process.run, back_extracted, self.model_manager)),
+            # --- THIS IS THE FIX ---
+            # We must call the 'run' function within the 'isnet_process' module.
+            "front": asyncio.create_task(asyncio.to_thread(isnet_process.run, front_extracted, self.model_manager)),
+            "back": asyncio.create_task(asyncio.to_thread(isnet_process.run, back_extracted, self.model_manager)),
         }
         results = await asyncio.gather(*tasks.values())
         bg_removed = {key: result for key, result in zip(tasks.keys(), results)}
@@ -127,11 +116,13 @@ class ImageProcessingPipeline:
         urls = {}
         save_tasks = []
         for key, img in images.items():
-            filename = f"design_{request_id}_{timestamp}_{key}.png"
+            filename = f"design_{request_id}_{timestamp}_{key}_isnet.png"
             filepath = self.output_dir / filename
             task = asyncio.create_task(asyncio.to_thread(img.save, filepath, "PNG"))
             save_tasks.append((key, filepath, task))
+
         await asyncio.gather(*[task for _, _, task in save_tasks])
+
         for key, filepath, _ in save_tasks:
             urls[key] = f"{settings.BASE_URL}/{filepath.name}"
         log.info("Images saved", count=len(urls))

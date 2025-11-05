@@ -7,7 +7,6 @@ import sys
 import torch
 import urllib.request
 from huggingface_hub import login, snapshot_download
-from transformers import AutoModelForImageSegmentation, AutoProcessor
 
 # Define the explicit cache directory for all downloads.
 CACHE_DIR = os.getenv("HF_HOME", "/models")
@@ -20,76 +19,28 @@ def download_models():
     print(f"--> All models will be saved to: {CACHE_DIR}")
     os.makedirs(CACHE_DIR, exist_ok=True)
 
-    os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+    # --- NOTE: Hugging Face login is no longer required as we are not downloading gated models ---
+    # --- but we keep the logic in case it's needed in the future. ---
 
     hf_token = os.getenv("HF_TOKEN")
-    if not hf_token:
-        print("ERROR: HF_TOKEN environment variable not set.")
-        return 1
+    if hf_token:
+        print(f"--> Found HF_TOKEN, authenticating...")
+        try:
+            login(token=hf_token, add_to_git_credential=False)
+            print("    ✓ Authentication successful.")
+        except Exception as e:
+            print(f"    WARNING: Failed to login to Hugging Face, but this may not be an issue. Details: {e}")
+    else:
+        print("--> HF_TOKEN not set. Skipping Hugging Face login.")
 
-    print(f"--> Found HF_TOKEN, authenticating...")
-    login(token=hf_token, add_to_git_credential=False)
-    print("    ✓ Authentication successful.")
 
-    # --- Step 1: Download Gated Model (RMBG 2.0) ---
+    # --- Step 1: REMOVED - RMBG 2.0 Download ---
+
+    # --- Step 2: REMOVED - BiRefNet HR Download ---
+
+    # --- Now Step 1: Download Real-ESRGAN Model from Official GitHub Release ---
     try:
-        print("\n[1/3] Downloading RMBG 2.0 (Gated Model) snapshot...")
-        repo_id = "briaai/RMBG-2.0"
-        revision = "a6a8895f89cf3150d2046e004766d2b93712c337" # Pin revision for consistency
-
-        # Download complete snapshot first to ensure all files are in cache
-        snapshot_download(
-            repo_id=repo_id,
-            revision=revision,
-            cache_dir=CACHE_DIR,
-            token=hf_token,
-            # Allow patterns to ensure custom code and config files are fetched
-            allow_patterns=["*.json", "*.safetensors", "*.bin", "*.py", "*.md", "*.txt"]
-        )
-
-        # Then load with from_pretrained to populate transformers' internal cache mapping if needed
-        AutoModelForImageSegmentation.from_pretrained(
-            repo_id, trust_remote_code=True, token=hf_token, cache_dir=CACHE_DIR, revision=revision
-        )
-        AutoProcessor.from_pretrained(
-            repo_id, trust_remote_code=True, token=hf_token, cache_dir=CACHE_DIR, revision=revision
-        )
-        print("      ✓ RMBG 2.0 snapshot and model loaded successfully.")
-        print(f"        (Verified in cache directory: {os.path.join(CACHE_DIR, 'models--briaai--RMBG-2.0')})")
-    except Exception as e:
-        print(f"      ERROR: Failed to download RMBG 2.0. Have you accepted the license?")
-        print(f"      Details: {e}")
-        return 1
-
-    # --- Step 2: Download Public Model (BiRefNet HR) ---
-    try:
-        print("\n[2/3] Downloading BiRefNet HR model snapshot...")
-        repo_id = "ZhengPeng7/BiRefNet_HR-matting"
-        # --- THIS IS A MORE STABLE REVISION HASH FOR THIS MODEL ---
-        revision = "4548a3861993fb5a6f174dd2b5b52b9dbc226769"
-
-        # Download complete snapshot first to ensure all files are in cache
-        snapshot_download(
-            repo_id=repo_id,
-            revision=revision,
-            cache_dir=CACHE_DIR,
-            # Allow patterns to ensure custom code and config files are fetched
-            allow_patterns=["*.json", "*.safetensors", "*.bin", "*.py", "*.md", "*.txt"]
-        )
-
-        # Pre-load to populate transformers' internal cache mapping
-        AutoModelForImageSegmentation.from_pretrained(
-            repo_id, trust_remote_code=True, cache_dir=CACHE_DIR, revision=revision
-        )
-        print("      ✓ BiRefNet-HR snapshot and model loaded successfully.")
-        print(f"        (Verified in cache directory: {os.path.join(CACHE_DIR, 'models--ZhengPeng7--BiRefNet_HR-matting')})")
-    except Exception as e:
-        print(f"      ERROR: Failed to download BiRefNet-HR: {e}")
-        return 1
-
-    # --- Step 3: Download Real-ESRGAN Model from Official GitHub Release ---
-    try:
-        print("\n[3/3] Downloading Real-ESRGAN model weights from GitHub...")
+        print("\n[1/1] Downloading Real-ESRGAN model weights from GitHub...")
 
         model_url = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth"
         model_dir = os.path.join(CACHE_DIR, "xinntao_Real-ESRGAN")
@@ -99,7 +50,6 @@ def download_models():
         if not os.path.exists(model_save_path):
             print(f"      Downloading from {model_url}...")
             urllib.request.urlretrieve(model_url, model_save_path)
-            # --- EXPLICIT LOGGING OF THE SAVE PATH ---
             print(f"      ✓ Real-ESRGAN downloaded and saved to: {model_save_path}")
         else:
             print(f"      ✓ Real-ESRGAN already exists at: {model_save_path}")
@@ -109,7 +59,9 @@ def download_models():
         return 1
 
     print("\n" + "=" * 70)
-    print("All models downloaded and cached successfully!")
+    print("All required public models downloaded successfully!")
+    print("\nIMPORTANT: Please ensure you have manually added the 'isnet_dis_weights.pth' file")
+    print(f"to the '{CACHE_DIR}' directory.")
     print("=" * 70)
     return 0
 

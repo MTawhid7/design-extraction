@@ -6,16 +6,14 @@ echo "Image Processing Service - Starting"
 echo "=========================================="
 echo ""
 
-CACHE_DIR="/models" # Corrected Path
+CACHE_DIR="/models"
 
-# --- NEW, MORE ROBUST CHECK ---
-# Instead of checking for exact, long file paths which can change,
-# we will check for the existence of the main model directories.
-MODEL_DIR_1="$CACHE_DIR/models--briaai--RMBG-2.0"
-MODEL_DIR_2="$CACHE_DIR/models--ZhengPeng7--BiRefNet_HR-matting"
-MODEL_FILE_3="$CACHE_DIR/xinntao_Real-ESRGAN/RealESRGAN_x4plus.pth"
+# --- MODIFIED: More robust check for the new model set ---
+# We now check for the IS-Net weights and the Real-ESRGAN model file.
+MODEL_FILE_ISNET="$CACHE_DIR/isnet-general-use.pth"
+MODEL_FILE_ESRGAN="$CACHE_DIR/xinntao_Real-ESRGAN/RealESRGAN_x4plus.pth"
 
-if [ -d "$MODEL_DIR_1" ] && [ -d "$MODEL_DIR_2" ] && [ -f "$MODEL_FILE_3" ]; then
+if [ -f "$MODEL_FILE_ISNET" ] && [ -f "$MODEL_FILE_ESRGAN" ]; then
     CACHE_SIZE=$(du -sh $CACHE_DIR | cut -f1)
     echo "✅ Models found in mounted volume (size: ${CACHE_SIZE})"
     export HF_HUB_OFFLINE=1
@@ -28,14 +26,20 @@ if [ -d "$MODEL_DIR_1" ] && [ -d "$MODEL_DIR_2" ] && [ -f "$MODEL_FILE_3" ]; the
     # Execute the main command (e.g., python main.py)
     exec "$@"
 else
-    echo "❌ FATAL ERROR: One or more model directories were not found in the cache!"
-    echo "   Checked for:"
-    echo "   - Directory: $MODEL_DIR_1"
-    echo "   - Directory: $MODEL_DIR_2"
-    echo "   - File:      $MODEL_FILE_3"
+    echo "❌ FATAL ERROR: One or more model files were not found in the cache!"
+    echo "   Please ensure the following files exist in your './models' directory:"
+
+    if [ ! -f "$MODEL_FILE_ISNET" ]; then
+        echo "   - Missing: isnet_dis_weights.pth (must be added manually)"
+    fi
+    if [ ! -f "$MODEL_FILE_ESRGAN" ]; then
+        echo "   - Missing: RealESRGAN_x4plus.pth (download with 'make download-models')"
+    fi
+
     echo ""
-    echo "   Please run the following command ONCE to download the models:"
-    echo "   make download-models"
+    echo "   To fix this:"
+    echo "   1. Manually place 'isnet_dis_weights.pth' into the './models' folder."
+    echo "   2. Run 'make download-models' to fetch the Real-ESRGAN model."
     echo ""
     exit 1
 fi

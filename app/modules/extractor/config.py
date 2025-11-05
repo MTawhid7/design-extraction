@@ -18,7 +18,7 @@ EXTRACTION_PROMPT = """
 2.  **Recreate as a Flat Graphic:** The output should appear as a perfectly flat, two-dimensional representation of the design, as if it were a digital vector graphic.
 3.  **Preserve Integrity:** Maintain the original colors, proportions, and details of the design with high fidelity.
 4.  **Clean Edges:** The edges of the design must be sharp and well-defined.
-5.  **Output Format:** Generate a high-resolution PNG with a transparent background.
+5.  **Output Format:** Generate a high-resolution PNG with a pure white background.
 
 **Final Check:** Before outputting, verify that the image contains ONLY the design and nothing else.
 """
@@ -26,7 +26,7 @@ EXTRACTION_PROMPT = """
 # Generation configuration for Gemini 2.5 Flash Image API
 GENERATION_CONFIG = types.GenerateContentConfig(
     response_modalities=["IMAGE"],  # Request image output
-    temperature=0.4,
+    temperature=0.3,
     # Optional: Configure image output settings
     # image_config=types.ImageConfig(
     #     aspect_ratio="1:1",  # Options: "1:1", "16:9", "9:16", "4:3", "3:4", etc.

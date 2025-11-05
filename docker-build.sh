@@ -96,70 +96,75 @@ fi
 IMAGE_SIZE=$(docker images image-processor:latest --format "{{.Size}}" | head -1)
 print_info "Image size: $IMAGE_SIZE"
 
-# Check if models exist
+# --- CORRECTED MODEL CHECK LOGIC ---
 echo ""
-print_step "Checking model cache..."
+print_step "Checking model cache for required files..."
 
-if [ -d "models" ] && [ "$(ls -A models 2>/dev/null)" ]; then
+# Define the paths to the essential model files
+MODEL_FILE_ISNET="./models/isnet-general-use.pth"
+MODEL_FILE_ESRGAN="./models/xinntao_Real-ESRGAN/RealESRGAN_x4plus.pth"
+
+# Check if ALL required models exist on the host
+if [ -f "$MODEL_FILE_ISNET" ] && [ -f "$MODEL_FILE_ESRGAN" ]; then
     CACHE_SIZE=$(du -sh models 2>/dev/null | cut -f1 || echo "unknown")
-    print_info "✓ Models found in ./models (size: $CACHE_SIZE)"
+    print_info "✓ All required models found in ./models (size: $CACHE_SIZE)"
     MODELS_EXIST=true
 else
-    print_warn "Models not found in ./models"
+    print_warn "One or more required models are missing from ./models."
+    # List what is missing for the user
+    if [ ! -f "$MODEL_FILE_ISNET" ]; then
+        print_warn "  - MISSING: isnet-general-use.pth (You must add this manually)"
+    fi
+    if [ ! -f "$MODEL_FILE_ESRGAN" ]; then
+        print_warn "  - MISSING: RealESRGAN_x4plus.pth (Can be downloaded now)"
+    fi
     MODELS_EXIST=false
 fi
 
-# Download models if needed
+# Download models if the check above failed
 if [ "$MODELS_EXIST" = false ]; then
     echo ""
 
-    if [ "$DOWNLOAD_MODELS" == "yes" ]; then
-        DOWNLOAD_NOW=true
-    elif [ "$DOWNLOAD_MODELS" == "no" ]; then
-        DOWNLOAD_NOW=false
-    else
-        # Ask user
-        read -p "$(echo -e ${YELLOW}[?]${NC}) Download models now? (y/n) " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
+    # Only ask to download if the downloadable model is the one missing
+    if [ ! -f "$MODEL_FILE_ESRGAN" ]; then
+        if [ "$DOWNLOAD_MODELS" == "yes" ]; then
             DOWNLOAD_NOW=true
-        else
+        elif [ "$DOWNLOAD_MODELS" == "no" ]; then
             DOWNLOAD_NOW=false
-        fi
-    fi
-
-    if [ "$DOWNLOAD_NOW" = true ]; then
-        print_step "Downloading models... This will take 5-10 minutes."
-        print_info "Models will be saved to ./models/ and reused forever"
-        echo ""
-
-        docker run --rm \
-            --gpus all \
-            --env-file .env \
-            -e HF_HUB_OFFLINE=0 \
-            -v $(pwd)/models:/models \
-            --entrypoint="" \
-            image-processor:latest \
-            python3 /app/download_models.py
-
-        if [ $? -eq 0 ]; then
-            print_info "✓ Models downloaded successfully"
-            CACHE_SIZE=$(du -sh models/.cache 2>/dev/null | cut -f1 || echo "unknown")
-            print_info "  Cache size: $CACHE_SIZE"
         else
-            print_error "✗ Model download failed"
-            exit 1
+            # Ask user
+            read -p "$(echo -e ${YELLOW}[?]${NC}) Download missing public models now (Real-ESRGAN)? (y/n) " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                DOWNLOAD_NOW=true
+            else
+                DOWNLOAD_NOW=false
+            fi
         fi
-    else
-        print_warn "Skipping model download"
-        print_info "Models will be downloaded on first container start (slower)"
-        print_info "Or download manually later with:"
-        echo ""
-        echo "  docker run --rm --gpus all \\"
-        echo "    -v \$(pwd)/models:/models \\"
-        echo "    image-processor:latest \\"
-        echo "    python3 /app/download_models.py"
-        echo ""
+
+        if [ "$DOWNLOAD_NOW" = true ]; then
+            print_step "Downloading models... This will take a few minutes."
+            print_info "Models will be saved to ./models/ and reused."
+            echo ""
+
+            docker run --rm \
+                --gpus all \
+                --env-file .env \
+                -e HF_HUB_OFFLINE=0 \
+                -v $(pwd)/models:/models \
+                --entrypoint="" \
+                image-processor:latest \
+                python3 /app/download_models.py
+
+            if [ $? -eq 0 ]; then
+                print_info "✓ Public models downloaded successfully"
+            else
+                print_error "✗ Model download failed"
+                exit 1
+            fi
+        else
+            print_warn "Skipping model download."
+        fi
     fi
 fi
 
@@ -170,35 +175,19 @@ echo "Setup Complete!"
 echo "=========================================="
 echo ""
 
-if [ "$MODELS_EXIST" = true ] || [ "$DOWNLOAD_NOW" = true ]; then
+# Re-check to give the user final status and next steps
+if [ -f "$MODEL_FILE_ISNET" ] && [ -f "$MODEL_FILE_ESRGAN" ]; then
     print_info "System ready! Next steps:"
     echo ""
     echo "1. Ensure GEMINI_API_KEY is set in .env"
-    echo ""
-    echo "2. Start the service:"
-    echo "   docker-compose up -d"
-    echo ""
-    echo "3. Check logs:"
-    echo "   docker-compose logs -f"
-    echo ""
-    echo "4. Test the service:"
-    echo "   curl http://localhost:8008/health"
-    echo "   python test_client.py"
+    echo "2. Start the service: make up"
+    echo "3. Check logs: make logs"
+    echo "4. Test the service: make test"
     echo ""
     print_info "Models are cached in ./models/ and will load instantly!"
 else
-    print_warn "Models not downloaded yet. Service will work but slower on first start."
-    echo ""
-    echo "Recommended workflow:"
-    echo ""
-    echo "1. Download models first (one time, ~5-10 min):"
-    echo "   docker run --rm --gpus all \\"
-    echo "     -v \$(pwd)/models:/models \\"
-    echo "     image-processor:latest \\"
-    echo "     python3 /app/download_models.py"
-    echo ""
-    echo "2. Then start service (instant startup):"
-    echo "   docker-compose up -d"
+    print_error "Setup is incomplete. Required models are still missing."
+    print_error "Please check the ./models directory and re-run this script."
     echo ""
 fi
 
@@ -212,12 +201,4 @@ echo "  • Download once, use forever"
 echo "  • Container rebuilds don't lose models"
 echo "  • Fast startup (models already downloaded)"
 echo "  • Easy backup (just backup ./models/ folder)"
-echo ""
-
-print_info "Quick commands:"
-echo "  Build:    bash docker-build.sh [production|dev] [default|no-cache]"
-echo "  Start:    docker-compose up -d"
-echo "  Stop:     docker-compose down"
-echo "  Logs:     docker-compose logs -f"
-echo "  Shell:    docker exec -it image-processor bash"
 echo ""

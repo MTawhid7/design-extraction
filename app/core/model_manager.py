@@ -14,7 +14,8 @@ from basicsr.archs.rrdbnet_arch import RRDBNet
 import os
 
 from app.config import settings
-
+# --- NEW: Import the IS-Net model architecture ---
+from app.modules.remover.isnet.isnet_model import ISNetDIS
 
 log = structlog.get_logger(__name__)
 CACHE_DIR = os.getenv("HF_HOME", "/models")
@@ -26,9 +27,15 @@ class ModelManager:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.is_initialized = False
         self.gemini_client: Optional[genai.Client] = None
-        self.rmbg_model = None
-        self.rmbg_processor = None
-        self.birefnet_model = None
+
+        # --- REMOVED: rmbg and birefnet models ---
+        # self.rmbg_model = None
+        # self.rmbg_processor = None
+        # self.birefnet_model = None
+
+        # --- ADDED: isnet model ---
+        self.isnet_model = None
+
         self.realesrgan_model = None
         log.info("ModelManager created", device=str(self.device))
 
@@ -36,11 +43,13 @@ class ModelManager:
         if self.is_initialized: return
         log.info("Starting model initialization...")
         await self._init_gemini()
+
+        # --- MODIFIED: Simplified model loading ---
         await asyncio.gather(
-            self._init_rmbg(),
-            self._init_birefnet(),
+            self._init_isnet(),
             self._init_realesrgan(),
         )
+
         self.is_initialized = True
         log.info("All models initialized successfully")
         if self.device.type == "cuda":
@@ -53,35 +62,28 @@ class ModelManager:
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("GEMINI_API_KEY environment variable not set")
-
-        # Create the new google-genai SDK client
         self.gemini_client = genai.Client(api_key=api_key)
         log.info("Gemini Client initialized with google-genai SDK")
 
-    async def _init_rmbg(self):
-        log.info("Loading RMBG 2.0 model from local path...")
-        local_model_path = os.path.join(CACHE_DIR, "models--briaai--RMBG-2.0", "snapshots", "a6a8895f89cf3150d2046e004766d2b93712c337")
-        self.rmbg_model = AutoModelForImageSegmentation.from_pretrained(
-            local_model_path, trust_remote_code=True, local_files_only=True
-        )
-        self.rmbg_processor = AutoProcessor.from_pretrained(
-            local_model_path, trust_remote_code=True, local_files_only=True
-        )
-        self.rmbg_model.to(self.device)
-        if self.device.type == "cuda": self.rmbg_model.half()
-        self.rmbg_model.eval()
-        log.info("RMBG 2.0 model loaded from explicit local path.")
+    # --- REMOVED: _init_rmbg method ---
 
-    async def _init_birefnet(self):
-        log.info("Loading BiRefNet-HR model from local path...")
-        local_model_path = os.path.join(CACHE_DIR, "models--ZhengPeng7--BiRefNet_HR-matting", "snapshots", "4548a3861993fb5a6f174dd2b5b52b9dbc226769")
-        self.birefnet_model = AutoModelForImageSegmentation.from_pretrained(
-            local_model_path, trust_remote_code=True, local_files_only=True
-        )
-        self.birefnet_model.to(self.device)
-        if self.device.type == "cuda": self.birefnet_model.half()
-        self.birefnet_model.eval()
-        log.info("BiRefNet-HR model loaded from explicit local path.")
+    # --- REMOVED: _init_birefnet method ---
+
+    # --- ADDED: _init_isnet method ---
+    async def _init_isnet(self):
+        """Initialize the IS-Net background removal model."""
+        log.info("Loading IS-Net model...")
+        model_path = os.path.join(CACHE_DIR, "isnet-general-use.pth")
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"IS-Net model not found at {model_path}. Please add it to the ./models directory.")
+
+        self.isnet_model = ISNetDIS()
+        self.isnet_model.load_state_dict(torch.load(model_path, map_location='cpu'))
+        self.isnet_model.to(self.device)
+        if self.device.type == "cuda":
+            self.isnet_model.half()
+        self.isnet_model.eval()
+        log.info("IS-Net model loaded successfully.")
 
     async def _init_realesrgan(self):
         """Initialize Real-ESRGAN upscaling model from the local cache."""
@@ -102,11 +104,15 @@ class ModelManager:
 
     async def cleanup(self):
         log.info("Cleaning up ModelManager...")
-        if self.rmbg_model: self.rmbg_model.cpu()
-        if self.birefnet_model: self.birefnet_model.cpu()
+        # --- REMOVED: rmbg and birefnet cleanup ---
+        # if self.rmbg_model: self.rmbg_model.cpu()
+        # if self.birefnet_model: self.birefnet_model.cpu()
+
+        # --- ADDED: isnet cleanup ---
+        if self.isnet_model: self.isnet_model.cpu()
+
         if self.realesrgan_model: self.realesrgan_model = None
         if self.gemini_client:
-            # Close the async client if using async context
             if hasattr(self.gemini_client, 'aio'):
                 await self.gemini_client.aio.aclose()
         if self.device.type == "cuda": torch.cuda.empty_cache()

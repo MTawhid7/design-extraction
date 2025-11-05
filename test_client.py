@@ -20,7 +20,7 @@ async def test_health_check():
 async def test_process_images():
     """Test the main image processing endpoint."""
 
-    # Sample request payload
+    # Sample request payload (remains the same)
     request_data = {
         "id": 245,
         "conversation_id": 196,
@@ -41,7 +41,6 @@ async def test_process_images():
 
     async with httpx.AsyncClient(timeout=300.0) as client:  # 5 minute timeout
         try:
-            # --- THIS IS THE CORRECTED LINE ---
             response = await client.post(
                 "http://192.168.10.74:8008/process",
                 json=request_data
@@ -56,11 +55,11 @@ async def test_process_images():
                 result = response.json()
                 print(f"\nResponse:")
                 print(json.dumps(result, indent=2))
+
+                # --- MODIFIED: Check for new response fields ---
                 print(f"\nOutputs generated:")
-                print(f"  - Front RMBG: {result['front_rmbg']}")
-                print(f"  - Front BiRefNet: {result['front_birefnet']}")
-                print(f"  - Back RMBG: {result['back_rmbg']}")
-                print(f"  - Back BiRefNet: {result['back_birefnet']}")
+                print(f"  - Front Output: {result['front_output']}")
+                print(f"  - Back Output: {result['back_output']}")
                 print(f"\nServer processing time: {result['processing_time_seconds']:.2f}s")
             else:
                 print(f"Error: {response.text}")
