@@ -10,7 +10,7 @@ class ISNetSettings(BaseSettings):
     # Model settings
     MODEL_INPUT_SIZE: tuple[int, int] = (1024, 1024)
 
-    # Noise removal
+    # Noise removal (more conservative for IS-Net)
     USE_NOISE_REMOVAL: bool = True
     NOISE_REMOVAL_THRESHOLD: float = 0.01
     MIN_COMPONENT_AREA: int = 50
@@ -23,34 +23,36 @@ class ISNetSettings(BaseSettings):
     USE_GAMMA_CORRECTION: bool = True
     GAMMA_VALUE: float = 0.75
 
-    # Adaptive thresholding
+    # Adaptive thresholding (replaces fixed 0.92)
     USE_ADAPTIVE_THRESHOLDING: bool = True
     CORE_PERCENTILE: int = 75
     TRANSITION_PERCENTILE: int = 40
     EDGE_PERCENTILE: int = 15
+
+    # Legacy threshold (used if adaptive is disabled)
+    CORE_THRESHOLD_FIXED: float = 0.65
 
     # Edge refinement
     USE_EDGE_REFINEMENT: bool = True
     EDGE_DILATION_KERNEL: int = 3
     EDGE_BLUR_KERNEL: int = 5
 
-    # Bilateral filter for edge preservation
+    # Bilateral filter (better edge preservation)
     USE_BILATERAL_FILTER: bool = True
     BILATERAL_D: int = 9
     BILATERAL_SIGMA_COLOR: int = 75
     BILATERAL_SIGMA_SPACE: int = 75
 
-    # Morphological closing to fill small holes
+    # Morphological closing (fill small holes)
     USE_MORPHOLOGICAL_CLOSING: bool = True
     CLOSING_KERNEL_SIZE: int = 3
 
-    # Unsharp masking for edge sharpening
+    # Unsharp masking (edge sharpening)
     USE_UNSHARP_MASK: bool = True
     UNSHARP_STRENGTH: float = 0.3
     UNSHARP_BLUR_SIZE: int = 5
 
-    # --- DEBUGGING ---
-    # Set to True to save intermediate images from the pipeline to the 'outputs' folder.
+    # Debugging - Set to True to save intermediate images to 'outputs' folder
     SHOW_DEBUG_IMAGES: bool = False
 
 settings = ISNetSettings()

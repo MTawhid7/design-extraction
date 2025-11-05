@@ -36,12 +36,13 @@ FROM dependencies AS production
 ENV HF_HOME=/models \
     HF_HUB_OFFLINE=1
 
+# --- MODIFICATION: Copy the external DIS repository into the image ---
+COPY external/DIS /app/external/DIS
+
 COPY app /app/app
 COPY main.py /app/
 COPY download_models.py /app/
 
-# --- THIS IS THE CRITICAL FIX ---
-# DO NOT create the /models directory here. It will be provided by the volume mount.
 RUN mkdir -p /app/outputs /app/logs && chmod 777 /app/outputs /app/logs
 
 ENV PATH="/opt/venv/bin:$PATH"
@@ -54,5 +55,4 @@ COPY docker-entrypoint.sh /app/
 RUN chmod +x /app/docker-entrypoint.sh
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-# Start uvicorn directly on the correct port, respecting the PORT environment variable.
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
