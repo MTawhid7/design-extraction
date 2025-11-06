@@ -29,8 +29,8 @@ async def test_process_images():
         "template_color_id": 1,
         "parameters": None,
         "output": {
-            "front": "https://i.ibb.co/X0FHFnd/cba0c26a8660b738ed25ecd4e528c4ef-png-2200x2200q80-png.webp",
-            "back": "https://i.ibb.co/wZSKc7ZP/size-L.jpg"
+            "front": "https://i.ibb.co.com/JhfvhVJ/Everything-Is-Fine-T-Shirt-Baby-Blue.png",
+            "back": "https://i.ibb.co.com/9HRg303d/cba0c26a8660b738ed25ecd4e528c4ef-png-2200x2200q80-png.png"
         }
     }
 

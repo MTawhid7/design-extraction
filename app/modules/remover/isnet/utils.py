@@ -1,7 +1,7 @@
 # app/modules/remover/isnet/utils.py
 """
 Helper functions for the IS-Net image processing pipeline.
-Exact implementations from the research notebook.
+Updated to match IS-Net_V3 notebook implementation exactly.
 """
 import cv2
 import numpy as np
@@ -15,8 +15,6 @@ from .config import settings
 def save_debug_image(image_data: np.ndarray, step_name: str):
     """
     Saves an image to the output directory for debugging if the setting is enabled.
-    Note: This function is not from the notebook - it's added for production use.
-    The notebook used matplotlib visualization instead.
     """
     if not settings.SHOW_DEBUG_IMAGES:
         return
@@ -72,20 +70,6 @@ def apply_gamma_correction(alpha_matte, gamma=0.75):
     return np.power(alpha_matte, gamma)
 
 
-def refine_edges(alpha_matte, dilation_kernel=3, blur_kernel=5):
-    """Refine edges using morphological operations and Gaussian blur."""
-    alpha_uint8 = (alpha_matte * 255).astype(np.uint8)
-
-    # Slight dilation to include edge pixels
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (dilation_kernel, dilation_kernel))
-    dilated = cv2.dilate(alpha_uint8, kernel, iterations=1)
-
-    # Gaussian blur for smooth transitions
-    blurred = cv2.GaussianBlur(dilated, (blur_kernel, blur_kernel), 0)
-
-    return blurred.astype(np.float32) / 255.0
-
-
 def apply_bilateral_filter(alpha_matte, d=9, sigma_color=75, sigma_space=75):
     """Bilateral filter for edge-preserving smoothing."""
     alpha_uint8 = (alpha_matte * 255).astype(np.uint8)
@@ -101,23 +85,18 @@ def apply_morphological_closing(alpha_matte, kernel_size=3):
     return closed.astype(np.float32) / 255.0
 
 
-def apply_unsharp_mask(alpha_matte, strength=0.3, blur_size=5):
-    """Sharpen edges using unsharp masking."""
-    blurred = cv2.GaussianBlur(alpha_matte, (blur_size, blur_size), 0)
-    sharpened = alpha_matte + strength * (alpha_matte - blurred)
-    return np.clip(sharpened, 0, 1)
+def create_blurred_layer(alpha_matte, kernel_size, intensity):
+    """
+    Applies a Gaussian blur and intensity to create a soft layer.
+    This is the new function from IS-Net_V3 for smooth outlines.
+    """
+    # Ensure kernel size is odd
+    kernel_size = kernel_size if kernel_size % 2 != 0 else kernel_size + 1
 
+    # Apply blur
+    blurred_matte = cv2.GaussianBlur(alpha_matte, (kernel_size, kernel_size), 0)
 
-def compute_adaptive_thresholds(alpha_matte, exclude_threshold=0.05):
-    """Compute adaptive thresholds based on percentiles."""
-    foreground_mask = alpha_matte > exclude_threshold
-    foreground_values = alpha_matte[foreground_mask]
+    # Apply intensity and clip
+    soft_layer = np.clip(blurred_matte * intensity, 0, 1)
 
-    if len(foreground_values) == 0:
-        return 0.65, 0.40, 0.15
-
-    core_threshold = np.percentile(foreground_values, settings.CORE_PERCENTILE)
-    transition_threshold = np.percentile(foreground_values, settings.TRANSITION_PERCENTILE)
-    edge_threshold = np.percentile(foreground_values, settings.EDGE_PERCENTILE)
-
-    return core_threshold, transition_threshold, edge_threshold
+    return soft_layer
