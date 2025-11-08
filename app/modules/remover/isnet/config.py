@@ -1,47 +1,39 @@
 # app/modules/remover/isnet/config.py
 """
-Configuration for the IS-Net processing pipeline.
-Updated to match IS-Net_V3 notebook with SMOOTH OUTLINE support.
+Configuration for IS-Net V6 - ULTIMATE PRINT-QUALITY (2025 Optimized)
+Research-backed improvements with minimal processing philosophy.
 """
 from pydantic_settings import BaseSettings
 
+
 class ISNetSettings(BaseSettings):
-    """Configuration for IS-Net (DIS) Pipeline - V3 with Smooth Outline"""
+    """Configuration for IS-Net V6 Pipeline - Ultimate Print Quality"""
 
     # Model settings
     MODEL_INPUT_SIZE: tuple[int, int] = (1024, 1024)
 
-    # Noise removal
+    # === STAGE 1: Smart Noise Removal ===
     USE_NOISE_REMOVAL: bool = True
-    NOISE_REMOVAL_THRESHOLD: float = 0.01
-    MIN_COMPONENT_AREA: int = 50
+    MIN_COMPONENT_SIZE: int = 50        # Smaller = preserve more detail
+    NOISE_THRESHOLD: float = 0.01       # Very conservative
 
-    # Enhancement settings
-    USE_CONTRAST_STRETCHING: bool = True
-    CONTRAST_EXCLUDE_THRESHOLD: float = 0.05
-    USE_GAMMA_CORRECTION: bool = True
-    GAMMA_VALUE: float = 0.75
+    # === STAGE 2: Adaptive Contrast Enhancement ===
+    USE_ADAPTIVE_CONTRAST: bool = True
+    GAMMA_CORRECTION: float = 1.0       # 1.0 = neutral, <1 brighten, >1 darken
+    STRETCH_PERCENTILE_LOW: float = 1.0    # Work on ENTIRE alpha range
+    STRETCH_PERCENTILE_HIGH: float = 99.0
+    STRETCH_STRENGTH: float = 0.5       # Subtle: 0.3-0.7 ideal
 
-    # Guided Filtering settings
-    GUIDANCE_PERCENTILE: int = 50
+    # === STAGE 3: Gentle Gaussian Smoothing ===
+    USE_GAUSSIAN_SMOOTH: bool = True
+    GAUSSIAN_SIGMA: float = 0.5         # 0.5-2.0 for subtle smoothing
 
-    # Core processing parameters
-    CORE_BILATERAL_D: int = 9
-    CORE_BILATERAL_SIGMA_COLOR: int = 75
-    CORE_BILATERAL_SIGMA_SPACE: int = 75
-
-    # ✨ SMOOTH OUTLINE SETTINGS (NEW)
-    USE_SMOOTH_OUTLINE: bool = True
-    # Controls the spread/softness of the outline. Smaller values = sharper edge.
-    OUTLINE_BLUR_KERNEL_SIZE: int = 7
-    # Controls the opacity of the blurred outline.
-    OUTLINE_INTENSITY: float = 0.8
-
-    # Morphological closing
-    USE_MORPHOLOGICAL_CLOSING: bool = True
-    CLOSING_KERNEL_SIZE: int = 3
+    # === STAGE 4: Feathering (OPTIONAL) ===
+    USE_EDGE_FEATHERING: bool = False
+    FEATHER_RADIUS: int = 1             # Subtle: 1-2
 
     # Debugging - Set to True to save intermediate images to 'outputs' folder
     SHOW_DEBUG_IMAGES: bool = False
+
 
 settings = ISNetSettings()
