@@ -45,15 +45,15 @@ nano .env
 - **`BASE_URL`**: The public-facing URL for your service (e.g., `http://localhost:8008` for local testing).
 
 ### 2. Place the IS-Net Model Manually (Critical Step)
-The IS-Net model weights are not downloaded by the script. You must place them in the `models` directory yourself.
+Due to its research origins, the IS-Net model weights are not downloaded by the script. You must place them in the `models` directory yourself.
 
 1.  **Create the directory:**
     ```bash
     mkdir -p models
     ```
-2.  **Copy your model file** into this directory. The file **must** be named `isnet-general-use.pth`.
+2.  **Copy your model file** into this directory. The file **must** be named exactly **`isnet-general-use.pth`**.
 
-The final path must be exactly: `./models/isnet-general-use.pth`
+The final path must be: `./models/isnet-general-use.pth`
 
 ### 3. One-Time Setup Command
 This single command builds the Docker image and runs the script to download the remaining required models (Real-ESRGAN) to the `./models` directory.
@@ -66,7 +66,8 @@ make setup
 This command starts the container in the background. The application will then take 10-30 seconds to load the models from the cache into GPU memory.
 
 ```bash
-make up```
+make up
+```
 
 ### 5. Verify and Test
 - **Check the Logs**: View the service logs to confirm a clean startup.
@@ -94,17 +95,19 @@ Use these `make` commands to manage the service.
 | Command | Description |
 | :--- | :--- |
 | `make help` | ✨ Show all available commands. |
-| `make setup` | 🚀 **(Run once)** Build the image and download all public models. |
+| `make setup` | 🚀 **(Run once)** Build image & download public models. |
 | `make up` | 🟢 Start the service in the background. |
 | `make down` | 🔴 Stop the service. |
 | `make restart` | 🔄 Restart the service. |
 | `make logs` | 📜 View live logs from the service. |
 | `make test` | 🧪 Run the health check and test client against the service. |
-| `make shell` | 💻 Access a `bash` shell inside the running container for debugging. |
+| `make shell` | 💻 Access a `bash` shell inside the running container. |
 | `make status` | 📊 Show the status of the running containers. |
 | `make check-cache` | 🔍 Verify the contents of the persistent `./models` cache. |
+| `make clean-outputs` | 🗑️ Delete all generated images from `./outputs/`. |
 | `make clean` | 🧹 Safely stop and remove **this project's** containers and images. |
-| `make clean-full`| 🗑️ **(DANGEROUS)** Clean the project AND delete all downloaded models from `./models/`. |
+| `make clean-full`| 💥 **NUCLEAR OPTION:** Clean project AND DELETE all models from `./models/`. |
+
 
 ## API Reference
 
@@ -134,12 +137,20 @@ Processes front and back images through the full Gemini -> IS-Net -> Real-ESRGAN
 ### `GET /health`
 Checks the service and model loading status.
 
+**Response (200 OK)**:
+```json
+{
+  "status": "healthy",
+  "models_loaded": true
+}
+```
+
 ## Performance & Optimization
 
 - **GPU**: NVIDIA L4 24GB
 - **Startup Time**: ~25 seconds (container start + model load)
 - **Processing Time**: 7-14 seconds per request
-- **Peak VRAM Usage**: ~1.1GB
+- **Peak VRAM Usage**: ~1.1GB **per worker** (e.g., `WORKERS=2` may use ~2.2GB)
 
 ## 💾 Backup Strategy
 
