@@ -36,12 +36,18 @@ def run(input_image: Image.Image, model_manager: ModelManager) -> Image.Image:
     rgb_np = np.array(rgb_image)
     alpha_np = np.array(alpha_channel)
 
+    # --- THIS IS THE FIX ---
+    # Convert the RGB NumPy array to BGR before passing it to the upsampler.
+    rgb_np_bgr = rgb_np[:, :, ::-1]
+    # -----------------------
+
     # 2. Upscale RGB channels
     log.info("Real-ESRGAN: Upscaling RGB channels...")
     # The enhance method returns a NumPy array (H, W, C) with BGR channel order
-    output_rgb_bgr, _ = upsampler.enhance(rgb_np, outscale=4)
+    # Pass the corrected BGR array to the function.
+    output_rgb_bgr, _ = upsampler.enhance(rgb_np_bgr, outscale=4)
 
-    # Convert BGR back to RGB for PIL
+    # Convert BGR back to RGB for PIL (this part was already correct)
     output_rgb_np = output_rgb_bgr[:, :, ::-1]
 
     # 3. Upscale Alpha channel

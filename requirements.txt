@@ -45,6 +45,7 @@ structlog>=24.4.0,<25.0.0
 
 # Utilities
 python-dotenv>=1.0.0,<2.0.0
+filelock~=3.20.0
 
 # Hugging Face Hub (for model downloads)
 huggingface-hub>=0.25.0,<1.0.0

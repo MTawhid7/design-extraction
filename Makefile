@@ -1,6 +1,6 @@
 # Makefile for the Image Processing Service
 
-.PHONY: all build up down restart logs test shell status clean clean-full help setup download-models check-cache
+.PHONY: all build up down restart logs test shell status clean clean-full help setup download-models check-cache clean-outputs
 
 help: ## ✨ Show this help message
 	@echo "----------------------------------------------------"
@@ -69,12 +69,26 @@ check-cache: ## 🔍 Verify the persistent model cache on the host
 	fi
 
 # --- CLEAN COMMANDS ---
+clean-outputs: ## 🗑️ Delete all generated images from ./outputs/
+	@echo "\033[93m--> WARNING: This will permanently delete all generated images from ./outputs/\033[0m"
+	@printf "Are you sure? (y/N) "; \
+	read -r REPLY; \
+	case "$$REPLY" in \
+		[yY]*) \
+			echo "--> Deleting host outputs directory..."; \
+			sudo rm -rf ./outputs; \
+			echo "✓ Outputs directory deleted."; \
+			;; \
+		*) \
+			echo "Cancelled."; \
+			;; \
+	esac
+
 clean: ## 🧹 Safely remove THIS PROJECT's containers and images
 	@echo "--> Safely removing all containers, networks, and images for THIS project ONLY..."
 	@docker compose down --rmi all -v
 
-# --- THIS IS THE CORRECTED, PORTABLE COMMAND ---
-clean-full: ## 🗑️  NUCLEAR OPTION: Clean project AND DELETE the host model cache
+clean-full: ## 💥 NUCLEAR OPTION: Clean project AND DELETE the host model cache
 	@echo "\033[91m--> WARNING: This will permanently delete the downloaded models from ./models/\033[0m"
 	@printf "Are you sure you want to force a full re-download? (y/N) "; \
 	read -r REPLY; \
