@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     BASE_URL: str = "https://yourcdn.com"  # Base URL for generated images
 
     # Global switch to enable/disable saving of intermediate debug images.
-    DEBUG_SAVE_IMAGES: bool = True
+    DEBUG_SAVE_IMAGES: bool = False
 
     # Processing settings
     MAX_IMAGE_SIZE: int = 4096  # Maximum image dimension
