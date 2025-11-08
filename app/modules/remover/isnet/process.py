@@ -57,7 +57,6 @@ def run(input_image: Image.Image, model_manager: "ModelManager") -> Image.Image:
     pred_resized = transforms.Resize(original_size[::-1])(pred.clamp(0, 1).unsqueeze(0))
     base_alpha = pred_resized.squeeze().cpu().numpy().astype(np.float32)
 
-    utils.save_debug_image(base_alpha, "1_isnet_raw_output")
     log.info("IS-Net V6 [Stage 1/4]: Inference complete.")
 
     current_alpha = base_alpha.copy()
@@ -73,7 +72,6 @@ def run(input_image: Image.Image, model_manager: "ModelManager") -> Image.Image:
             settings.MIN_COMPONENT_SIZE,
             settings.NOISE_THRESHOLD
         )
-        utils.save_debug_image(current_alpha, "2_noise_removed")
         log.info("IS-Net V6 [Stage 2/4]: Noise removal complete.")
     else:
         log.info("IS-Net V6 [Stage 2/4]: Noise removal skipped.")
@@ -91,7 +89,6 @@ def run(input_image: Image.Image, model_manager: "ModelManager") -> Image.Image:
             settings.STRETCH_PERCENTILE_HIGH,
             settings.STRETCH_STRENGTH
         )
-        utils.save_debug_image(current_alpha, "3_contrast_enhanced")
         log.info("IS-Net V6 [Stage 3/4]: Contrast enhancement complete.")
     else:
         log.info("IS-Net V6 [Stage 3/4]: Contrast enhancement skipped.")
@@ -105,7 +102,6 @@ def run(input_image: Image.Image, model_manager: "ModelManager") -> Image.Image:
             current_alpha,
             settings.GAUSSIAN_SIGMA
         )
-        utils.save_debug_image(current_alpha, "4_gaussian_smoothed")
         log.info("IS-Net V6 [Stage 4/4]: Gaussian smoothing complete.")
     else:
         log.info("IS-Net V6 [Stage 4/4]: Gaussian smoothing skipped.")
@@ -116,7 +112,6 @@ def run(input_image: Image.Image, model_manager: "ModelManager") -> Image.Image:
     if settings.USE_EDGE_FEATHERING:
         log.info(f"IS-Net V6 [Optional]: Edge Feathering (radius={settings.FEATHER_RADIUS})...")
         current_alpha = utils.feather_edges(current_alpha, settings.FEATHER_RADIUS)
-        utils.save_debug_image(current_alpha, "5_edge_feathered")
         log.info("IS-Net V6 [Optional]: Edge feathering complete.")
 
     final_alpha = current_alpha
@@ -124,7 +119,6 @@ def run(input_image: Image.Image, model_manager: "ModelManager") -> Image.Image:
     # ═══════════════════════════════════════════════════════════════════
     # Create Final RGBA Image
     # ═══════════════════════════════════════════════════════════════════
-    utils.save_debug_image(final_alpha, "6_final_alpha")
     log.info("IS-Net V6: Creating final RGBA image.")
 
     rgb_array = np.array(input_image)

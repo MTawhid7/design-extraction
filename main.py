@@ -12,6 +12,7 @@ from app.models.request import ProcessRequest
 from app.models.response import ProcessResponse
 from app.services.pipeline import ImageProcessingPipeline
 from app.core.model_manager import ModelManager
+from app.config import settings
 
 log = structlog.get_logger(__name__)
 
@@ -108,8 +109,8 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
-        port=8000,  # The internal port should be 8000 as defined in the compose file
-        workers=1,
-        log_level="info"
+        host=settings.HOST,
+        port=settings.PORT,
+        workers=settings.WORKERS,
+        log_level=settings.LOG_LEVEL.lower()
     )

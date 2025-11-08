@@ -1,8 +1,4 @@
-"""
-Main processing pipeline with maximum parallelism.
-Orchestrates the complete image processing workflow.
-Updated for IS-Net integration (2025).
-"""
+# app/services/pipeline.py
 import asyncio
 from typing import Dict, Tuple
 from PIL import Image
@@ -19,8 +15,10 @@ from app.modules.remover.isnet import process as isnet_process
 from app.modules.upscaler import process as upscaler_process
 from app.config import settings
 
-log = structlog.get_logger(__name__)
+# --- IMPORT THE DEBUG UTILITY ---
+from app.core.debug_utils import save_debug_image
 
+log = structlog.get_logger(__name__)
 
 class ImageProcessingPipeline:
     """Orchestrates parallel image processing pipeline."""
@@ -30,8 +28,10 @@ class ImageProcessingPipeline:
         self.downloader = ImageDownloader()
         self.output_dir = Path(settings.OUTPUT_DIR)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.upscaler_semaphore = asyncio.Semaphore(settings.UPSCALER_CONCURRENCY_LIMIT)
-        log.info("Pipeline initialized", upscaler_concurrency=settings.UPSCALER_CONCURRENCY_LIMIT)
+        # --- LOCKS ARE NO LONGER NEEDED with multiple workers ---
+        # self.upscaler_semaphore = asyncio.Semaphore(settings.UPSCALER_CONCURRENCY_LIMIT)
+        # self.isnet_lock = asyncio.Lock()
+        log.info("Pipeline initialized")
 
     async def process(self, request: ProcessRequest) -> ProcessResponse:
         """Execute the complete processing pipeline."""
@@ -41,15 +41,23 @@ class ImageProcessingPipeline:
         try:
             log.info("Stage 1: Downloading images...")
             front_img, back_img = await self._download_images(request)
+            save_debug_image(request.id, "front", "0_original", front_img)
+            save_debug_image(request.id, "back", "0_original", back_img)
+
 
             log.info("Stage 2: Extracting designs with Gemini...")
             front_extracted, back_extracted = await self._extract_designs(front_img, back_img)
+            save_debug_image(request.id, "front", "1_gemini_extracted", front_extracted)
+            save_debug_image(request.id, "back", "1_gemini_extracted", back_extracted)
+
 
             log.info("Stage 3: Removing backgrounds with IS-Net...")
-            bg_removed_images = await self._remove_backgrounds(front_extracted, back_extracted)
+            bg_removed_images = await self._remove_backgrounds(request.id, front_extracted, back_extracted)
+
 
             log.info("Stage 4: Upscaling images...")
-            upscaled_images = await self._upscale_images(bg_removed_images)
+            upscaled_images = await self._upscale_images(request.id, bg_removed_images)
+
 
             log.info("Stage 5: Saving images...")
             urls = await self._save_images(request.id, upscaled_images)
@@ -69,49 +77,56 @@ class ImageProcessingPipeline:
             raise
 
     async def _download_images(self, request: ProcessRequest) -> Tuple[Image.Image, Image.Image]:
-        """Download front and back images in parallel."""
+        # ... (no changes here)
         front_task = self.downloader.download(request.output.front)
         back_task = self.downloader.download(request.output.back)
         front_img, back_img = await asyncio.gather(front_task, back_task)
         log.info("Images downloaded", front_size=front_img.size, back_size=back_img.size)
         return front_img, back_img
 
+
     async def _extract_designs(self, front_img: Image.Image, back_img: Image.Image) -> Tuple[Image.Image, Image.Image]:
+        # ... (no changes here)
         front_task = gemini_process.run(front_img, self.model_manager)
         back_task = gemini_process.run(back_img, self.model_manager)
         front_extracted, back_extracted = await asyncio.gather(front_task, back_task)
         log.info("Designs extracted", front_size=front_extracted.size, back_size=back_extracted.size)
         return front_extracted, back_extracted
 
-    async def _remove_backgrounds(self, front_extracted: Image.Image, back_extracted: Image.Image) -> Dict[str, Image.Image]:
-        tasks = {
-            # --- THIS IS THE FIX ---
-            # We must call the 'run' function within the 'isnet_process' module.
-            "front": asyncio.create_task(asyncio.to_thread(isnet_process.run, front_extracted, self.model_manager)),
-            "back": asyncio.create_task(asyncio.to_thread(isnet_process.run, back_extracted, self.model_manager)),
-        }
-        results = await asyncio.gather(*tasks.values())
-        bg_removed = {key: result for key, result in zip(tasks.keys(), results)}
+
+    async def _remove_backgrounds(self, request_id: int, front_extracted: Image.Image, back_extracted: Image.Image) -> Dict[str, Image.Image]:
+        """Remove backgrounds in parallel using asyncio.to_thread."""
+        front_task = asyncio.to_thread(isnet_process.run, front_extracted, self.model_manager)
+        back_task = asyncio.to_thread(isnet_process.run, back_extracted, self.model_manager)
+
+        front_removed, back_removed = await asyncio.gather(front_task, back_task)
+
+        save_debug_image(request_id, "front", "2_isnet_removed", front_removed)
+        save_debug_image(request_id, "back", "2_isnet_removed", back_removed)
+
+        bg_removed = {"front": front_removed, "back": back_removed}
         log.info("Background removal complete", outputs=list(bg_removed.keys()))
         return bg_removed
 
-    async def _upscale_one_image(self, key: str, image: Image.Image) -> Tuple[str, Image.Image]:
-        """A helper function to wrap the upscaling task with the semaphore."""
-        async with self.upscaler_semaphore:
-            log.info(f"Upscaler lock acquired for: {key}")
-            upscaled_image = await asyncio.to_thread(upscaler_process.run, image, self.model_manager)
-            log.info(f"Upscaler lock released for: {key}")
-            return key, upscaled_image
-
-    async def _upscale_images(self, bg_removed_images: Dict[str, Image.Image]) -> Dict[str, Image.Image]:
-        """Upscale images with concurrency limited by the semaphore."""
-        tasks = [self._upscale_one_image(key, img) for key, img in bg_removed_images.items()]
+    async def _upscale_images(self, request_id: int, bg_removed_images: Dict[str, Image.Image]) -> Dict[str, Image.Image]:
+        """Upscale images in parallel using asyncio.to_thread."""
+        tasks = [
+            asyncio.to_thread(upscaler_process.run, img, self.model_manager)
+            for img in bg_removed_images.values()
+        ]
+        keys = list(bg_removed_images.keys())
         results = await asyncio.gather(*tasks)
-        upscaled = {key: result_img for key, result_img in results}
+
+        upscaled = {key: result_img for key, result_img in zip(keys, results)}
+
+        save_debug_image(request_id, "front", "3_realesrgan_upscaled", upscaled["front"])
+        save_debug_image(request_id, "back", "3_realesrgan_upscaled", upscaled["back"])
+
         log.info("Upscaling complete", outputs=list(upscaled.keys()))
         return upscaled
 
     async def _save_images(self, request_id: int, images: Dict[str, Image.Image]) -> Dict[str, str]:
+        # ... (no changes here)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         urls = {}
         save_tasks = []

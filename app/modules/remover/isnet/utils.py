@@ -13,24 +13,6 @@ from scipy.ndimage import gaussian_filter
 from .config import settings
 
 
-def save_debug_image(image_data: np.ndarray, step_name: str):
-    """
-    Saves an image to the output directory for debugging if the setting is enabled.
-    """
-    if not settings.SHOW_DEBUG_IMAGES:
-        return
-
-    try:
-        filename = f"debug_{uuid.uuid4().hex[:8]}_{step_name}.png"
-        save_path = Path("outputs") / filename
-
-        if image_data.dtype == np.float64 or image_data.dtype == np.float32:
-            image_data = (image_data * 255).astype(np.uint8)
-
-        Image.fromarray(image_data).save(save_path)
-    except Exception:
-        pass
-
 
 def smart_noise_removal(alpha_matte, min_size=50, threshold=0.01):
     """

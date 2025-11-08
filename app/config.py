@@ -20,10 +20,8 @@ class Settings(BaseSettings):
     OUTPUT_DIR: str = "outputs"
     BASE_URL: str = "https://yourcdn.com"  # Base URL for generated images
 
-    # --- MODIFIED: CONCURRENCY SETTING ---
-    # Controls how many upscaling tasks can run in parallel.
-    # Reduced to 2 since we now process half the number of images.
-    UPSCALER_CONCURRENCY_LIMIT: int = 2
+    # Global switch to enable/disable saving of intermediate debug images.
+    DEBUG_SAVE_IMAGES: bool = True
 
     # Processing settings
     MAX_IMAGE_SIZE: int = 4096  # Maximum image dimension
